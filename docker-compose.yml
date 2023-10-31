@@ -1,0 +1,93 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:15.2-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: space-project
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+
+  rabbitmq:
+    image: rabbitmq:3.12.7-alpine
+    restart: always
+    healthcheck:
+      test: [ "CMD", "rabbitmqctl", "status" ]
+      interval: 5s
+      timeout: 20s
+      retries: 5
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq/data
+    ports:
+      - '5672:5672'
+
+  pi-cron-1:
+    build:
+      context: ./pi-cron
+      dockerfile: ./Dockerfile.dev
+    depends_on:
+      postgres:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: password
+      DB_DATABASE: space-project
+      RMQ_URL: amqp://rabbitmq:5672
+
+  pi-cron-2:
+    build:
+      context: ./pi-cron
+      dockerfile: ./Dockerfile.dev
+    depends_on:
+      postgres:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: password
+      DB_DATABASE: space-project
+      RMQ_URL: amqp://rabbitmq:5672
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: ./Dockerfile.dev
+    depends_on:
+      postgres:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      PORT: 8080
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: password
+      DB_DATABASE: space-project
+      CLIENT_PORT: 3000
+      RMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - '8080:8080'
+
+  space-project-app:
+    build:
+      context: ./space-project-app
+      dockerfile: ./Dockerfile.dev
+    ports:
+      - '3000:3000'
+
+volumes:
+  postgres-data:
+  rabbitmq-data:
